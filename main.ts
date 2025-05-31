@@ -2,14 +2,11 @@ radio.on()
 radio.setGroup(1)
 let strip = neopixel.create(DigitalPin.P0, 64, NeoPixelMode.RGB)
 let nivel = 0
-//  Nivel recibido del otro microbit
 let nivel_suavizado = 0
-//  Nivel interpolado suavemente
 let t = 0
-//  Tiempo para animación
-//  Anillos desde el centro hacia los bordes
+//  Anillos desde el centro
 let anillos = [[27, 28, 35, 36], [19, 20, 21, 26, 29, 34, 43, 44, 45], [10, 11, 12, 13, 18, 22, 25, 30, 33, 37, 42, 46, 49, 50, 51], [2, 3, 4, 9, 14, 17, 23, 24, 31, 32, 38, 39, 47, 52, 53, 54], [0, 1, 5, 6, 7, 8, 15, 16, 40, 41, 48, 55, 56, 57, 58, 59, 60, 61, 62, 63]]
-//  Función HUE → RGB (versión simple para MakeCode)
+//  Función HUE → RGB (compatible)
 function hue_to_rgb(hue: number): number {
     hue = hue % 360
     let section = Math.idiv(hue, 60)
@@ -30,7 +27,7 @@ function hue_to_rgb(hue: number): number {
     
 }
 
-//  Receptor de datos de aceleración
+//  Receptor de movimiento
 radio.onReceivedString(function on_received_string(receivedString: string) {
     let x: number;
     let y: number;
@@ -59,9 +56,10 @@ radio.onReceivedString(function on_received_string(receivedString: string) {
     }
     
 })
-//  Animación suave y orgánica
+//  Animación suave con color desde el centro y latido global
 basic.forever(function on_forever() {
     let ring: number[];
+    let hue: number;
     let color: number;
     let intensidad: number;
     let j: number;
@@ -70,34 +68,36 @@ basic.forever(function on_forever() {
     let g: number;
     let b: number;
     
-    //  Interpolación suave entre niveles
+    //  Suavizar nivel
     if (nivel_suavizado < nivel) {
-        nivel_suavizado += 0.2
+        nivel_suavizado += 0.1
         if (nivel_suavizado > nivel) {
             nivel_suavizado = nivel
         }
         
     } else if (nivel_suavizado > nivel) {
-        nivel_suavizado -= 0.2
+        nivel_suavizado -= 0.1
         if (nivel_suavizado < nivel) {
             nivel_suavizado = nivel
         }
         
     }
     
-    //  Latido triangular: sube y baja entre 0–1
+    //  Respiración: latido triangular
     let frame = Math.trunc(t)
-    let ciclo = frame % 60
-    let brillo = (ciclo < 30 ? ciclo : 60 - ciclo) / 30
-    let hue_base = t * 2 % 360
-    let fraccion = Math.trunc(nivel_suavizado * anillos.length)
-    let max_anillos = 1 + Math.idiv(fraccion, 10)
+    let ciclo = frame % 80
+    let brillo = (ciclo < 40 ? ciclo : 80 - ciclo) / 40
+    //  0–1–0
+    //  Hue base se desplaza con tiempo
+    let hue_base = frame * 3 % 360
+    //  Recorremos todos los anillos, siempre encendidos
     let i = 0
-    while (i < max_anillos) {
+    while (i < anillos.length) {
         ring = anillos[i]
-        color = hue_to_rgb(hue_base + i * 20)
+        hue = (hue_base + i * 15) % 360
+        color = hue_to_rgb(hue)
         intensidad = Math.trunc(255 * brillo * (1 - i / anillos.length))
-        //  más fuerte en centro
+        //  centro más brillante
         j = 0
         while (j < ring.length) {
             pixel = ring[j]
@@ -113,6 +113,7 @@ basic.forever(function on_forever() {
         i += 1
     }
     strip.show()
-    t += 1
-    basic.pause(80)
+    //  Tiempo avanza más rápido con mayor movimiento
+    t = t + 1 + Math.trunc(nivel_suavizado)
+    basic.pause(60)
 })

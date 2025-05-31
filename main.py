@@ -7,11 +7,11 @@ radio.set_group(1)
 
 strip = neopixel.create(DigitalPin.P0, 64, NeoPixelMode.RGB)
 
-nivel = 0            # Nivel recibido del otro microbit
-nivel_suavizado = 0  # Nivel interpolado suavemente
-t = 0                # Tiempo para animación
+nivel = 0
+nivel_suavizado = 0
+t = 0
 
-# Anillos desde el centro hacia los bordes
+# Anillos desde el centro
 anillos = [
     [27, 28, 35, 36],
     [19, 20, 21, 26, 29, 34, 43, 44, 45],
@@ -20,7 +20,7 @@ anillos = [
     [0, 1, 5, 6, 7, 8, 15, 16, 40, 41, 48, 55, 56, 57, 58, 59, 60, 61, 62, 63]
 ]
 
-# Función HUE → RGB (versión simple para MakeCode)
+# Función HUE → RGB (compatible)
 def hue_to_rgb(hue):
     hue = hue % 360
     section = hue // 60
@@ -39,7 +39,7 @@ def hue_to_rgb(hue):
     else:
         return neopixel.rgb(255, 0, 255 - offset)
 
-# Receptor de datos de aceleración
+# Receptor de movimiento
 def on_received_string(receivedString):
     global nivel
     parts = receivedString.split(",")
@@ -58,42 +58,41 @@ def on_received_string(receivedString):
 
 radio.on_received_string(on_received_string)
 
-# Animación suave y orgánica
+# Animación suave con color desde el centro y latido global
 def on_forever():
     global t, nivel_suavizado
 
-    # Interpolación suave entre niveles
+    # Suavizar nivel
     if nivel_suavizado < nivel:
-        nivel_suavizado += 0.2
+        nivel_suavizado += 0.1
         if nivel_suavizado > nivel:
             nivel_suavizado = nivel
     elif nivel_suavizado > nivel:
-        nivel_suavizado -= 0.2
+        nivel_suavizado -= 0.1
         if nivel_suavizado < nivel:
             nivel_suavizado = nivel
 
-    # Latido triangular: sube y baja entre 0–1
+    # Respiración: latido triangular
     frame = int(t)
-    ciclo = frame % 60
+    ciclo = frame % 80
+    brillo = (ciclo if ciclo < 40 else 80 - ciclo) / 40  # 0–1–0
 
-    brillo = (ciclo if ciclo < 30 else 60 - ciclo) / 30
+    # Hue base se desplaza con tiempo
+    hue_base = (frame * 3) % 360
 
-    hue_base = (t * 2) % 360
-
-    fraccion = int(nivel_suavizado * len(anillos))
-    max_anillos = 1 + (fraccion // 10)
-
-
-
+    # Recorremos todos los anillos, siempre encendidos
     i = 0
-    while i < max_anillos:
+    while i < len(anillos):
         ring = anillos[i]
-        color = hue_to_rgb(hue_base + i * 20)
-        intensidad = int(255 * brillo * (1 - i / len(anillos)))  # más fuerte en centro
+        hue = (hue_base + i * 15) % 360
+        color = hue_to_rgb(hue)
+
+        intensidad = int(255 * brillo * (1 - i / len(anillos)))  # centro más brillante
 
         j = 0
         while j < len(ring):
             pixel = ring[j]
+
             r = (color >> 16) & 0xFF
             g = (color >> 8) & 0xFF
             b = color & 0xFF
@@ -107,7 +106,9 @@ def on_forever():
         i += 1
 
     strip.show()
-    t += 1
-    basic.pause(80)
+
+    # Tiempo avanza más rápido con mayor movimiento
+    t = t + 1 + int(nivel_suavizado)
+    basic.pause(60)
 
 basic.forever(on_forever)
